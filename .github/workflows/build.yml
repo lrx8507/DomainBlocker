@@ -1,7 +1,7 @@
 name: Build DomainBlocker Tweak
 
 on:
-  workflow_dispatch:  # 仅手动触发（不再自动运行）
+  workflow_dispatch:  # 仅手动触发
 
 jobs:
   build:
@@ -9,23 +9,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # === 修复：正确设置 Homebrew 路径 ===
-      - name: Set up Homebrew PATH
+      # === 修复：添加 Theos Homebrew 仓库 ===
+      - name: Add Theos Homebrew tap
         run: |
-          echo "PATH=/opt/homebrew/bin:/usr/local/bin:$PATH" >> $GITHUB_ENV
-          echo "PATH after setup: $PATH"
-          which ldid || echo "ldid not found (will install now)"
+          brew tap theos/theos
+          echo "Theos tap added successfully"
       
-      # === 安装 ldid（关键修复：移除错误的 ldid -v 调用）===
-      - name: Install ldid
+      # === 修复：正确安装 ldid 和 Theos ===
+      - name: Install ldid and Theos
         run: |
+          # 安装 ldid（已安装，但需要验证路径）
           brew install ldid
-          which ldid  # 确认路径
-          echo "ldid installed successfully at $(which ldid)"
-      
-      # === 安装 Theos ===
-      - name: Set up Theos
-        run: |
+          which ldid
+          echo "ldid installed at $(which ldid)"
+          
+          # 安装 Theos（关键修复：使用正确的 tap）
           brew install theos
           echo "THEOS=$HOME/theos" >> $GITHUB_ENV
           echo "PATH=$HOME/theos/bin:$PATH" >> $GITHUB_ENV
