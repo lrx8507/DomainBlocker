@@ -54,12 +54,10 @@ static BOOL isUrlBlocked(NSURL *url) {
     self.view.backgroundColor = [UIColor colorWithRed:0.95 green:0.95 blue:0.97 alpha:1.0];
     self.title = @"域名屏蔽器";
     
-    // 导航栏样式
     self.navigationController.navigationBar.prefersLargeTitles = YES;
     self.navigationController.navigationBar.translucent = NO;
     self.navigationController.navigationBar.barTintColor = [UIColor whiteColor];
     
-    // 输入区域容器
     UIView *inputContainer = [[UIView alloc] initWithFrame:CGRectMake(16, 20, self.view.bounds.size.width - 32, 100)];
     inputContainer.backgroundColor = [UIColor whiteColor];
     inputContainer.layer.cornerRadius = 12;
@@ -69,14 +67,12 @@ static BOOL isUrlBlocked(NSURL *url) {
     inputContainer.layer.shadowRadius = 8;
     [self.view addSubview:inputContainer];
     
-    // 标题标签
     UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(16, 16, inputContainer.bounds.size.width - 32, 20)];
     label.text = @"添加屏蔽关键词";
     label.font = [UIFont boldSystemFontOfSize:14];
     label.textColor = [UIColor grayColor];
     [inputContainer addSubview:label];
     
-    // 输入框
     self.inputField = [[UITextField alloc] initWithFrame:CGRectMake(16, 44, inputContainer.bounds.size.width - 110, 40)];
     self.inputField.borderStyle = UITextBorderStyleNone;
     self.inputField.font = [UIFont systemFontOfSize:16];
@@ -84,12 +80,10 @@ static BOOL isUrlBlocked(NSURL *url) {
     self.inputField.delegate = self;
     [inputContainer addSubview:self.inputField];
     
-    // 分隔线
     UIView *line = [[UIView alloc] initWithFrame:CGRectMake(16, 84, inputContainer.bounds.size.width - 32, 0.5)];
     line.backgroundColor = [UIColor colorWithWhite:0.9 alpha:1.0];
     [inputContainer addSubview:line];
     
-    // 保存按钮
     UIButton *saveBtn = [UIButton buttonWithType:UIButtonTypeSystem];
     saveBtn.frame = CGRectMake(inputContainer.bounds.size.width - 90, 44, 74, 40);
     [saveBtn setTitle:@"保存" forState:UIControlStateNormal];
@@ -98,16 +92,14 @@ static BOOL isUrlBlocked(NSURL *url) {
     [saveBtn addTarget:self action:@selector(saveKeyword) forControlEvents:UIControlEventTouchUpInside];
     [inputContainer addSubview:saveBtn];
     
-    // 表格视图
     self.tableView = [[UITableView alloc] initWithFrame:CGRectMake(0, 130, self.view.bounds.size.width, self.view.bounds.size.height - 130) style:UITableViewStyleInsetGrouped];
     self.tableView.delegate = self;
     self.tableView.dataSource = self;
     self.tableView.backgroundColor = [UIColor clearColor];
     [self.view addSubview:self.tableView];
     
-    // 添加删除提示
     UILabel *footerLabel = [[UILabel alloc] init];
-    footerLabel.text = "左滑条目可删除";
+    footerLabel.text = @"左滑条目可删除";
     footerLabel.font = [UIFont italicSystemFontOfSize:12];
     footerLabel.textColor = [UIColor lightGrayColor];
     footerLabel.textAlignment = NSTextAlignmentCenter;
@@ -163,7 +155,12 @@ static BOOL isUrlBlocked(NSURL *url) {
 
 @end
 
-// --- 手势识别逻辑 (注入 SpringBoard) ---
+// ============================================
+// %group 定义 - 必须包裹 %hook 代码
+// ============================================
+
+// --- 手势识别逻辑 (SpringBoard) ---
+%group SpringBoardHooks
 %hook SpringBoard
 
 static NSTimer *longPressTimer = nil;
@@ -223,9 +220,10 @@ static NSInteger activeTouchesCount = 0;
 }
 
 %end
+%end
 
 // --- 网络拦截逻辑 ---
-%group NSURLSessionHook
+%group NSURLSessionHooks
 %hook NSURLSession
 
 - (NSURLSessionDataTask *)dataTaskWithURL:(NSURL *)url completionHandler:(void (^)(NSData * _Nullable data, NSURLResponse * _Nullable response, NSError * _Nullable error))completionHandler {
@@ -249,11 +247,17 @@ static NSInteger activeTouchesCount = 0;
 %end
 %end
 
+// ============================================
+// 入口点 - 初始化 %group
+// ============================================
 %ctor {
     loadKeywords();
-    %init(NSURLSessionHook);
-    // 手势只在 SpringBoard 初始化
+    
+    // 始终启用网络拦截
+    %init(NSURLSessionHooks);
+    
+    // 只在 SpringBoard 中启用手势
     if ([[[NSProcessInfo processInfo] processName] isEqualToString:@"SpringBoard"]) {
-        %init(SpringBoard);
+        %init(SpringBoardHooks);
     }
 }
