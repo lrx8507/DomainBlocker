@@ -1,80 +1,49 @@
-name: Build TrollStore Tweak
+name: Build DomainBlocker Tweak
 
 on:
+  push:
+    branches: [ main ]
   workflow_dispatch:
-    inputs:
-      debug_enabled:
-        description: 'Enable Debug Build'
-        required: false
-        default: 'false'
 
 jobs:
   build:
     runs-on: macos-latest
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Install Dependencies
+      - uses: actions/checkout@v4
+      
+      # === 修复：添加 Homebrew 路径到 PATH ===
+      - name: Set up Homebrew PATH
         run: |
-          brew install ldid dpkg make
-          
+          echo "PATH=/opt/homebrew/bin:/usr/local/bin:$PATH" >> $GITHUB_ENV
+          echo "Homebrew PATH set to: $PATH"
+      
+      # === 安装 ldid ===
       - name: Install ldid
         run: |
           brew install ldid
           ldid -v
           echo "ldid version: $(ldid -v)"
-
-      - name: Setup Theos
+      
+      # === 安装 Theos ===
+      - name: Set up Theos
         run: |
-          # 清理已存在的 theos 目录
-          rm -rf $HOME/theos
-          git clone --recursive https://github.com/theos/theos.git $HOME/theos
+          brew install theos
           echo "THEOS=$HOME/theos" >> $GITHUB_ENV
-
-      - name: Setup SDK
-        run: |
-          # 清理已存在的 sdk 目录
-          rm -rf $HOME/theos/sdks
-          mkdir -p $HOME/theos/sdks
-          
-          # 下载 SDK
-          git clone --recurse-submodules https://github.com/theos/sdks $HOME/theos/sdks
-          
-          # 创建符号链接
-          ln -s $HOME/theos/sdks/iPhoneOS15.5.sdk $HOME/theos/sdks/iPhoneOS16.0.sdk
-          
-          # 列出 SDK 目录内容用于调试
-          ls -la $HOME/theos/sdks/
-
+          echo "PATH=$HOME/theos/bin:$PATH" >> $GITHUB_ENV
+          theos --version
+      
+      # === 构建 DomainBlocker ===
       - name: Build Tweak
         run: |
           cd DomainBlocker
           make package FINALPACKAGE=1
-          if [ "${{ github.event.inputs.debug_enabled }}" == "true" ]; then
-            make package FINALPACKAGE=1 DEBUG=1
-          fi
-
-      - name: Sign Package (for TrollStore)
-        run: |
-          cd $GITHUB_WORKSPACE/DomainBlocker/packages
-          for deb in *.deb; do
-            echo "Signing $deb..."
-            WORK_DIR=$(mktemp -d)
-            cd $WORK_DIR
-            ar x $GITHUB_WORKSPACE/DomainBlocker/packages/$deb
-            tar -xzf data.tar.* -C .
-            find . -name "*.dylib" -exec ldid -S {} \;
-            rm -f data.tar.*
-            tar -czf data.tar.gz *
-            ar rcs $GITHUB_WORKSPACE/DomainBlocker/packages/$deb debian-binary control.tar.gz data.tar.gz
-            cd $GITHUB_WORKSPACE/DomainBlocker/packages
-            rm -rf $WORK_DIR
-          done
-
+          ls -l *.deb
+          mv *.deb domainblocker.deb
+          echo "DEB_FILE=domainblocker.deb" >> $GITHUB_ENV
+      
+      # === 上传构建产物 ===
       - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
-          name: DomainBlocker-TrollStore
-          path: DomainBlocker/packages/*.deb
-          retention-days: 90
+          name: DomainBlocker
+          path: DomainBlocker/*.deb
