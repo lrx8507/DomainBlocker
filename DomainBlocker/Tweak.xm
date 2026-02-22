@@ -70,21 +70,20 @@ static UIViewController *getTopVC() {
 - (void)viewDidLoad {
     [super viewDidLoad];
     
-    // 半透明黑色背景
+    // === 半透明背景（点击关闭）===
     UIView *bgView = [[UIView alloc] initWithFrame:self.view.bounds];
     bgView.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.5];
-    bgView.userInteractionEnabled = YES;
+    bgView.tag = 999;
     [self.view addSubview:bgView];
     
     // 点击背景关闭
-    UITapGestureRecognizer *tapGesture = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(closeSettings)];
-    [bgView addGestureRecognizer:tapGesture];
+    UITapGestureRecognizer *bgTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(closeSettings)];
+    [bgView addGestureRecognizer:bgTap];
     
     // === 悬浮框容器（圆角）===
     CGFloat popupWidth = self.view.bounds.size.width * 0.85;
     CGFloat popupHeight = self.view.bounds.size.height * 0.5;
     CGFloat popupX = (self.view.bounds.size.width - popupWidth) / 2;
-    // 屏幕中间位置（上 1/4 和下 1/4 之间）
     CGFloat popupY = self.view.bounds.size.height * 0.25;
     
     self.popupContainer = [[UIView alloc] initWithFrame:CGRectMake(popupX, popupY, popupWidth, popupHeight)];
@@ -95,9 +94,6 @@ static UIViewController *getTopVC() {
     self.popupContainer.layer.shadowOffset = CGSizeMake(0, 10);
     self.popupContainer.layer.shadowRadius = 20;
     self.popupContainer.userInteractionEnabled = YES;
-    // 防止点击背景时关闭
-    UITapGestureRecognizer *containerTap = [[UITapGestureRecognizer alloc] init];
-    [self.popupContainer addGestureRecognizer:containerTap];
     [self.view addSubview:self.popupContainer];
     
     // === 标题栏 ===
@@ -109,7 +105,7 @@ static UIViewController *getTopVC() {
     
     // 标题 "域名屏蔽器"
     self.titleLabel = [[UILabel alloc] initWithFrame:CGRectMake(20, 0, popupWidth - 100, 60)];
-    self.titleLabel.text = @"🛡️ 域名屏蔽器";
+    self.titleLabel.text = @"域名屏蔽器";
     self.titleLabel.font = [UIFont boldSystemFontOfSize:20];
     self.titleLabel.textColor = [UIColor blackColor];
     [headerView addSubview:self.titleLabel];
@@ -160,7 +156,7 @@ static UIViewController *getTopVC() {
     
     // === 列表标题 ===
     self.listTitleLabel = [[UILabel alloc] initWithFrame:CGRectMake(16, 165, popupWidth - 32, 25)];
-    self.listTitleLabel.text = @"📋 已屏蔽域名的关键词";
+    self.listTitleLabel.text = @"已屏蔽域名的关键词";
     self.listTitleLabel.font = [UIFont boldSystemFontOfSize:14];
     self.listTitleLabel.textColor = [UIColor darkGrayColor];
     [self.popupContainer addSubview:self.listTitleLabel];
@@ -175,7 +171,6 @@ static UIViewController *getTopVC() {
     self.tableView.clipsToBounds = YES;
     [self.popupContainer addSubview:self.tableView];
     
-    // 空状态提示
     if (blockedKeywords.count == 0) {
         UILabel *emptyLabel = [[UILabel alloc] init];
         emptyLabel.text = @"暂无屏蔽关键词";
@@ -189,12 +184,8 @@ static UIViewController *getTopVC() {
 
 - (void)closeSettings {
     RLog(@"关闭设置 UI");
-    [UIView animateWithDuration:0.3 animations:^{
-        self.popupContainer.alpha = 0;
-        self.popupContainer.transform = CGAffineTransformMakeScale(0.9, 0.9);
-    } completion:^(BOOL finished) {
-        [self.navigationController dismissViewControllerAnimated:NO completion:nil];
-    }];
+    // 直接 dismiss 整个 VC，确保背景和悬浮框一起消失
+    [self dismissViewControllerAnimated:YES completion:nil];
 }
 
 - (void)saveKeyword {
@@ -207,7 +198,7 @@ static UIViewController *getTopVC() {
         [self.tableView reloadData];
         self.tableView.backgroundView = nil;
         
-        // 成功提示（小 toast）
+        // 成功提示
         UILabel *toast = [[UILabel alloc] init];
         toast.text = @"✅ 已添加";
         toast.font = [UIFont systemFontOfSize:13];
@@ -243,15 +234,12 @@ static UIViewController *getTopVC() {
         cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:cellID];
         cell.backgroundColor = [UIColor whiteColor];
         cell.textLabel.font = [UIFont systemFontOfSize:14];
-        
-        // 圆角背景
         UIView *bgView = [[UIView alloc] init];
         bgView.backgroundColor = [[UIColor systemBlueColor] colorWithAlphaComponent:0.1];
         cell.selectedBackgroundView = bgView;
     }
     cell.textLabel.text = blockedKeywords[indexPath.row];
     cell.textLabel.textColor = [UIColor blackColor];
-    cell.accessoryType = UITableViewCellAccessoryNone;
     return cell;
 }
 
@@ -309,8 +297,9 @@ static NSInteger g_activeTouchesCount = 0;
     
     UIViewController *topVC = getTopVC();
     if (topVC) {
-        [topVC presentViewController:popupVC animated:YES completion:nil];
-        RLog(@"✅ UI 已显示");
+        [topVC presentViewController:popupVC animated:YES completion:^{
+            RLog(@"✅ UI 已显示");
+        }];
     }
 }
 
