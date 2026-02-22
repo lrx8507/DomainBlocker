@@ -9,7 +9,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # === 修复：添加 Theos Homebrew 仓库 ===
+      # === 修复：设置 Git 用户名和邮箱（关键！）===
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          echo "Git configured for GitHub Actions"
+      
+      # === 修复：添加 Theos Homebrew tap ===
       - name: Add Theos Homebrew tap
         run: |
           brew tap theos/theos
@@ -18,16 +25,14 @@ jobs:
       # === 修复：正确安装 ldid 和 Theos ===
       - name: Install ldid and Theos
         run: |
-          # 安装 ldid（已安装，但需要验证路径）
           brew install ldid
           which ldid
           echo "ldid installed at $(which ldid)"
           
-          # 安装 Theos（关键修复：使用正确的 tap）
           brew install theos
           echo "THEOS=$HOME/theos" >> $GITHUB_ENV
           echo "PATH=$HOME/theos/bin:$PATH" >> $GITHUB_ENV
-          which ldid  # 确认 ldid 在 PATH 中
+          which ldid
           theos --version
       
       # === 构建 DomainBlocker ===
