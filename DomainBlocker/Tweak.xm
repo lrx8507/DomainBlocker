@@ -28,15 +28,11 @@ static void saveKeywords() {
     RLog(@"💾 保存关键词完成");
 }
 
-// 统一的检查函数（参考您的核心逻辑）
 static BOOL shouldBlockURL(NSString *urlString) {
     if (!urlString || urlString.length == 0) return NO;
-    
     NSString *lowerUrl = [urlString lowercaseString];
-    
     for (NSString *keyword in blockedKeywords) {
         NSString *lowerKeyword = [keyword lowercaseString];
-        
         if ([lowerUrl containsString:lowerKeyword]) {
             RLog(@"🚫 拦截请求：[%@] 命中规则：%@", urlString, keyword);
             return YES;
@@ -59,96 +55,146 @@ static UIViewController *getTopVC() {
     return nil;
 }
 
-// ================= UI 设置界面 =================
-@interface DBSettingsViewController : UIViewController <UITableViewDelegate, UITableViewDataSource, UITextFieldDelegate>
+// ================= 美化版悬浮框 UI =================
+@interface DBPopupViewController : UIViewController <UITableViewDelegate, UITableViewDataSource, UITextFieldDelegate>
+@property (nonatomic, strong) UIView *popupContainer;
 @property (nonatomic, strong) UITableView *tableView;
 @property (nonatomic, strong) UITextField *inputField;
+@property (nonatomic, strong) UILabel *titleLabel;
+@property (nonatomic, strong) UIButton *closeButton;
+@property (nonatomic, strong) UILabel *listTitleLabel;
 @end
 
-@implementation DBSettingsViewController
+@implementation DBPopupViewController
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.view.backgroundColor = [UIColor colorWithRed:0.95 green:0.95 blue:0.97 alpha:1.0];
-    self.title = @"域名屏蔽器";
     
-    // 右上角关闭按钮
-    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] 
-        initWithTitle:@"完成" 
-        style:UIBarButtonItemStyleDone 
-        target:self 
-        action:@selector(closeSettings)];
+    // 半透明黑色背景
+    UIView *bgView = [[UIView alloc] initWithFrame:self.view.bounds];
+    bgView.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.5];
+    bgView.userInteractionEnabled = YES;
+    [self.view addSubview:bgView];
     
-    self.navigationController.navigationBar.prefersLargeTitles = YES;
-    self.navigationController.navigationBar.translucent = NO;
+    // 点击背景关闭
+    UITapGestureRecognizer *tapGesture = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(closeSettings)];
+    [bgView addGestureRecognizer:tapGesture];
     
-    // 输入区域
-    UIView *inputContainer = [[UIView alloc] initWithFrame:CGRectMake(16, 20, self.view.bounds.size.width - 32, 100)];
-    inputContainer.backgroundColor = [UIColor whiteColor];
+    // === 悬浮框容器（圆角）===
+    CGFloat popupWidth = self.view.bounds.size.width * 0.85;
+    CGFloat popupHeight = self.view.bounds.size.height * 0.5;
+    CGFloat popupX = (self.view.bounds.size.width - popupWidth) / 2;
+    // 屏幕中间位置（上 1/4 和下 1/4 之间）
+    CGFloat popupY = self.view.bounds.size.height * 0.25;
+    
+    self.popupContainer = [[UIView alloc] initWithFrame:CGRectMake(popupX, popupY, popupWidth, popupHeight)];
+    self.popupContainer.backgroundColor = [UIColor whiteColor];
+    self.popupContainer.layer.cornerRadius = 20;
+    self.popupContainer.layer.shadowColor = [UIColor blackColor].CGColor;
+    self.popupContainer.layer.shadowOpacity = 0.3;
+    self.popupContainer.layer.shadowOffset = CGSizeMake(0, 10);
+    self.popupContainer.layer.shadowRadius = 20;
+    self.popupContainer.userInteractionEnabled = YES;
+    // 防止点击背景时关闭
+    UITapGestureRecognizer *containerTap = [[UITapGestureRecognizer alloc] init];
+    [self.popupContainer addGestureRecognizer:containerTap];
+    [self.view addSubview:self.popupContainer];
+    
+    // === 标题栏 ===
+    UIView *headerView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, popupWidth, 60)];
+    headerView.backgroundColor = [UIColor whiteColor];
+    headerView.layer.cornerRadius = 20;
+    headerView.layer.maskedCorners = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner;
+    [self.popupContainer addSubview:headerView];
+    
+    // 标题 "域名屏蔽器"
+    self.titleLabel = [[UILabel alloc] initWithFrame:CGRectMake(20, 0, popupWidth - 100, 60)];
+    self.titleLabel.text = @"🛡️ 域名屏蔽器";
+    self.titleLabel.font = [UIFont boldSystemFontOfSize:20];
+    self.titleLabel.textColor = [UIColor blackColor];
+    [headerView addSubview:self.titleLabel];
+    
+    // 关闭按钮（右上角，灰色背景小框）
+    self.closeButton = [UIButton buttonWithType:UIButtonTypeSystem];
+    self.closeButton.frame = CGRectMake(popupWidth - 70, 10, 50, 40);
+    [self.closeButton setTitle:@"完成" forState:UIControlStateNormal];
+    self.closeButton.titleLabel.font = [UIFont systemFontOfSize:14];
+    self.closeButton.backgroundColor = [[UIColor lightGrayColor] colorWithAlphaComponent:0.3];
+    [self.closeButton setTitleColor:[UIColor darkGrayColor] forState:UIControlStateNormal];
+    self.closeButton.layer.cornerRadius = 8;
+    [self.closeButton addTarget:self action:@selector(closeSettings) forControlEvents:UIControlEventTouchUpInside];
+    [headerView addSubview:self.closeButton];
+    
+    // 分隔线
+    UIView *lineView = [[UIView alloc] initWithFrame:CGRectMake(0, 60, popupWidth, 0.5)];
+    lineView.backgroundColor = [[UIColor lightGrayColor] colorWithAlphaComponent:0.5];
+    [self.popupContainer addSubview:lineView];
+    
+    // === 输入区域 ===
+    UIView *inputContainer = [[UIView alloc] initWithFrame:CGRectMake(16, 70, popupWidth - 32, 90)];
+    inputContainer.backgroundColor = [[UIColor lightGrayColor] colorWithAlphaComponent:0.2];
     inputContainer.layer.cornerRadius = 12;
-    inputContainer.layer.shadowColor = [UIColor blackColor].CGColor;
-    inputContainer.layer.shadowOpacity = 0.05;
-    inputContainer.layer.shadowOffset = CGSizeMake(0, 4);
-    inputContainer.layer.shadowRadius = 8;
-    [self.view addSubview:inputContainer];
+    [self.popupContainer addSubview:inputContainer];
     
-    UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(16, 16, inputContainer.bounds.size.width - 32, 20)];
-    label.text = @"添加屏蔽关键词";
-    label.font = [UIFont boldSystemFontOfSize:14];
-    label.textColor = [UIColor grayColor];
-    [inputContainer addSubview:label];
+    UILabel *inputLabel = [[UILabel alloc] initWithFrame:CGRectMake(16, 10, popupWidth - 64, 20)];
+    inputLabel.text = @"添加屏蔽关键词";
+    inputLabel.font = [UIFont boldSystemFontOfSize:13];
+    inputLabel.textColor = [UIColor grayColor];
+    [inputContainer addSubview:inputLabel];
     
-    self.inputField = [[UITextField alloc] initWithFrame:CGRectMake(16, 44, inputContainer.bounds.size.width - 110, 40)];
+    self.inputField = [[UITextField alloc] initWithFrame:CGRectMake(16, 35, popupWidth - 120, 40)];
     self.inputField.borderStyle = UITextBorderStyleNone;
-    self.inputField.font = [UIFont systemFontOfSize:16];
+    self.inputField.font = [UIFont systemFontOfSize:15];
     self.inputField.placeholder = @"例如：/ad/, tracker";
+    self.inputField.textColor = [UIColor blackColor];
     self.inputField.delegate = self;
     [inputContainer addSubview:self.inputField];
     
-    UIView *line = [[UIView alloc] initWithFrame:CGRectMake(16, 84, inputContainer.bounds.size.width - 32, 0.5)];
-    line.backgroundColor = [UIColor colorWithWhite:0.9 alpha:1.0];
-    [inputContainer addSubview:line];
+    UIButton *addBtn = [UIButton buttonWithType:UIButtonTypeSystem];
+    addBtn.frame = CGRectMake(popupWidth - 100, 35, 84, 40);
+    [addBtn setTitle:@"添加" forState:UIControlStateNormal];
+    addBtn.titleLabel.font = [UIFont boldSystemFontOfSize:15];
+    [addBtn setTitleColor:[UIColor systemBlueColor] forState:UIControlStateNormal];
+    [addBtn addTarget:self action:@selector(saveKeyword) forControlEvents:UIControlEventTouchUpInside];
+    [inputContainer addSubview:addBtn];
     
-    UIButton *saveBtn = [UIButton buttonWithType:UIButtonTypeSystem];
-    saveBtn.frame = CGRectMake(inputContainer.bounds.size.width - 90, 44, 74, 40);
-    [saveBtn setTitle:@"保存" forState:UIControlStateNormal];
-    saveBtn.titleLabel.font = [UIFont boldSystemFontOfSize:15];
-    [saveBtn setTitleColor:[UIColor systemBlueColor] forState:UIControlStateNormal];
-    [saveBtn addTarget:self action:@selector(saveKeyword) forControlEvents:UIControlEventTouchUpInside];
-    [inputContainer addSubview:saveBtn];
+    // === 列表标题 ===
+    self.listTitleLabel = [[UILabel alloc] initWithFrame:CGRectMake(16, 165, popupWidth - 32, 25)];
+    self.listTitleLabel.text = @"📋 已屏蔽域名的关键词";
+    self.listTitleLabel.font = [UIFont boldSystemFontOfSize:14];
+    self.listTitleLabel.textColor = [UIColor darkGrayColor];
+    [self.popupContainer addSubview:self.listTitleLabel];
     
-    // 表格视图
-    self.tableView = [[UITableView alloc] initWithFrame:CGRectMake(0, 130, self.view.bounds.size.width, self.view.bounds.size.height - 130) style:UITableViewStyleInsetGrouped];
+    // === 表格视图 ===
+    self.tableView = [[UITableView alloc] initWithFrame:CGRectMake(16, 195, popupWidth - 32, popupHeight - 215) style:UITableViewStylePlain];
     self.tableView.delegate = self;
     self.tableView.dataSource = self;
     self.tableView.backgroundColor = [UIColor clearColor];
-    [self.view addSubview:self.tableView];
+    self.tableView.separatorStyle = UITableViewCellSeparatorStyleSingleLine;
+    self.tableView.layer.cornerRadius = 10;
+    self.tableView.clipsToBounds = YES;
+    [self.popupContainer addSubview:self.tableView];
     
-    // 底部关闭按钮
-    UIButton *closeBtn = [UIButton buttonWithType:UIButtonTypeSystem];
-    closeBtn.frame = CGRectMake(16, self.view.bounds.size.height - 80, self.view.bounds.size.width - 32, 50);
-    [closeBtn setTitle:@"关闭设置" forState:UIControlStateNormal];
-    closeBtn.titleLabel.font = [UIFont boldSystemFontOfSize:16];
-    closeBtn.backgroundColor = [UIColor systemRedColor];
-    [closeBtn setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
-    closeBtn.layer.cornerRadius = 10;
-    [closeBtn addTarget:self action:@selector(closeSettings) forControlEvents:UIControlEventTouchUpInside];
-    [self.view addSubview:closeBtn];
-    
-    // 使用说明
-    UILabel *infoLabel = [[UILabel alloc] init];
-    infoLabel.text = @"💡 关键词会匹配 URL 的任何部分（域名、路径、参数）";
-    infoLabel.font = [UIFont italicSystemFontOfSize:12];
-    infoLabel.textColor = [UIColor grayColor];
-    infoLabel.textAlignment = NSTextAlignmentCenter;
-    infoLabel.numberOfLines = 0;
-    infoLabel.frame = CGRectMake(16, self.view.bounds.size.height - 120, self.view.bounds.size.width - 32, 30);
-    [self.view addSubview:infoLabel];
+    // 空状态提示
+    if (blockedKeywords.count == 0) {
+        UILabel *emptyLabel = [[UILabel alloc] init];
+        emptyLabel.text = @"暂无屏蔽关键词";
+        emptyLabel.font = [UIFont italicSystemFontOfSize:13];
+        emptyLabel.textColor = [UIColor lightGrayColor];
+        emptyLabel.textAlignment = NSTextAlignmentCenter;
+        emptyLabel.frame = self.tableView.bounds;
+        self.tableView.backgroundView = emptyLabel;
+    }
 }
 
 - (void)closeSettings {
     RLog(@"关闭设置 UI");
-    [self.navigationController dismissViewControllerAnimated:YES completion:nil];
+    [UIView animateWithDuration:0.3 animations:^{
+        self.popupContainer.alpha = 0;
+        self.popupContainer.transform = CGAffineTransformMakeScale(0.9, 0.9);
+    } completion:^(BOOL finished) {
+        [self.navigationController dismissViewControllerAnimated:NO completion:nil];
+    }];
 }
 
 - (void)saveKeyword {
@@ -159,10 +205,25 @@ static UIViewController *getTopVC() {
         [self.inputField setText:@""];
         [self.inputField resignFirstResponder];
         [self.tableView reloadData];
+        self.tableView.backgroundView = nil;
         
-        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"成功" message:@"关键词已保存" preferredStyle:UIAlertControllerStyleAlert];
-        [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:nil]];
-        [getTopVC() presentViewController:alert animated:YES completion:nil];
+        // 成功提示（小 toast）
+        UILabel *toast = [[UILabel alloc] init];
+        toast.text = @"✅ 已添加";
+        toast.font = [UIFont systemFontOfSize:13];
+        toast.textColor = [UIColor whiteColor];
+        toast.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.7];
+        toast.textAlignment = NSTextAlignmentCenter;
+        toast.layer.cornerRadius = 8;
+        toast.clipsToBounds = YES;
+        toast.frame = CGRectMake(self.popupContainer.bounds.size.width/2 - 40, 50, 80, 30);
+        [self.popupContainer addSubview:toast];
+        
+        [UIView animateWithDuration:1.0 animations:^{
+            toast.alpha = 0;
+        } completion:^(BOOL finished) {
+            [toast removeFromSuperview];
+        }];
     }
 }
 
@@ -180,11 +241,17 @@ static UIViewController *getTopVC() {
     UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:cellID];
     if (!cell) {
         cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:cellID];
-        cell.contentView.backgroundColor = [UIColor whiteColor];
-        cell.textLabel.font = [UIFont systemFontOfSize:16];
+        cell.backgroundColor = [UIColor whiteColor];
+        cell.textLabel.font = [UIFont systemFontOfSize:14];
+        
+        // 圆角背景
+        UIView *bgView = [[UIView alloc] init];
+        bgView.backgroundColor = [[UIColor systemBlueColor] colorWithAlphaComponent:0.1];
+        cell.selectedBackgroundView = bgView;
     }
     cell.textLabel.text = blockedKeywords[indexPath.row];
     cell.textLabel.textColor = [UIColor blackColor];
+    cell.accessoryType = UITableViewCellAccessoryNone;
     return cell;
 }
 
@@ -193,7 +260,20 @@ static UIViewController *getTopVC() {
         [blockedKeywords removeObjectAtIndex:indexPath.row];
         saveKeywords();
         [tableView deleteRowsAtIndexPaths:@[indexPath] withRowAnimation:UITableViewRowAnimationFade];
+        if (blockedKeywords.count == 0) {
+            UILabel *emptyLabel = [[UILabel alloc] init];
+            emptyLabel.text = @"暂无屏蔽关键词";
+            emptyLabel.font = [UIFont italicSystemFontOfSize:13];
+            emptyLabel.textColor = [UIColor lightGrayColor];
+            emptyLabel.textAlignment = NSTextAlignmentCenter;
+            emptyLabel.frame = tableView.bounds;
+            tableView.backgroundView = emptyLabel;
+        }
     }
+}
+
+- (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath {
+    return 40;
 }
 
 @end
@@ -223,14 +303,13 @@ static NSInteger g_activeTouchesCount = 0;
     RLog(@"👆 三指长按触发！");
     loadKeywords();
     
-    DBSettingsViewController *settingsVC = [[DBSettingsViewController alloc] init];
-    UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:settingsVC];
-    nav.modalPresentationStyle = UIModalPresentationOverCurrentContext;
-    nav.view.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.4];
+    DBPopupViewController *popupVC = [[DBPopupViewController alloc] init];
+    popupVC.modalPresentationStyle = UIModalPresentationOverCurrentContext;
+    popupVC.modalTransitionStyle = UIModalTransitionStyleCrossDissolve;
     
     UIViewController *topVC = getTopVC();
     if (topVC) {
-        [topVC presentViewController:nav animated:YES completion:nil];
+        [topVC presentViewController:popupVC animated:YES completion:nil];
         RLog(@"✅ UI 已显示");
     }
 }
@@ -240,7 +319,6 @@ static NSInteger g_activeTouchesCount = 0;
 // ================= Hook 区域 =================
 %group DomainBlockerHooks
 
-// Hook UIWindow - 手势识别
 %hook UIWindow
 - (void)sendEvent:(UIEvent *)event {
     %orig;
@@ -251,49 +329,29 @@ static NSInteger g_activeTouchesCount = 0;
 }
 %end
 
-// ================= 核心拦截逻辑（参考您的代码）=================
-
-// Hook 1: 拦截 URL 对象创建
 %hook NSURL
-
 + (instancetype)URLWithString:(NSString *)URLString {
-    if (shouldBlockURL(URLString)) {
-        return nil;
-    }
+    if (shouldBlockURL(URLString)) return nil;
     return %orig;
 }
-
 - (instancetype)initWithString:(NSString *)URLString {
-    if (shouldBlockURL(URLString)) {
-        return nil;
-    }
+    if (shouldBlockURL(URLString)) return nil;
     return %orig;
 }
-
 %end
 
-// Hook 2: 拦截 URLRequest
 %hook NSURLRequest
-
 + (instancetype)requestWithURL:(NSURL *)URL {
-    if (shouldBlockURL(URL.absoluteString)) {
-        return nil;
-    }
+    if (shouldBlockURL(URL.absoluteString)) return nil;
     return %orig;
 }
-
 - (instancetype)initWithURL:(NSURL *)URL {
-    if (shouldBlockURL(URL.absoluteString)) {
-        return nil;
-    }
+    if (shouldBlockURL(URL.absoluteString)) return nil;
     return %orig;
 }
-
 %end
 
-// Hook 3: 拦截 NSURLSession（额外保障）
 %hook NSURLSession
-
 - (NSURLSessionDataTask *)dataTaskWithURL:(NSURL *)url completionHandler:(void (^)(NSData *, NSURLResponse *, NSError *))completionHandler {
     if (shouldBlockURL(url.absoluteString)) {
         RLog(@"🚫 NSURLSession 拦截：%@", url.absoluteString);
@@ -303,7 +361,6 @@ static NSInteger g_activeTouchesCount = 0;
     }
     return %orig;
 }
-
 - (NSURLSessionDataTask *)dataTaskWithRequest:(NSURLRequest *)request completionHandler:(void (^)(NSData *, NSURLResponse *, NSError *))completionHandler {
     if (shouldBlockURL(request.URL.absoluteString)) {
         RLog(@"🚫 NSURLSession 拦截：%@", request.URL.absoluteString);
@@ -313,12 +370,10 @@ static NSInteger g_activeTouchesCount = 0;
     }
     return %orig;
 }
-
 %end
 
 %end
 
-// ================= 入口点 =================
 %ctor {
     loadKeywords();
     RLog(@"🔌 插件已加载");
