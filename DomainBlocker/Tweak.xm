@@ -1,15 +1,6 @@
 #import <UIKit/UIKit.h>
 #import <Foundation/Foundation.h>
 
-// ============================================
-// SpringBoard 私有类声明
-// ============================================
-@interface SpringBoard : UIApplication
-@end
-
-// ============================================
-// 全局变量和辅助函数
-// ============================================
 static NSString * const kStorageKey = @"DB_BlockedKeywords";
 static NSMutableArray *blockedKeywords = nil;
 
@@ -34,19 +25,23 @@ static BOOL isUrlBlocked(NSURL *url) {
     return NO;
 }
 
+// === 修复：适配普通 App 的 getTopVC ===
 static UIViewController *getTopVC() {
-    UIWindow *keyWindow = [UIApplication sharedApplication].keyWindow;
-    if (!keyWindow) return nil;
-    UIViewController *topVC = keyWindow.rootViewController;
-    while (topVC.presentedViewController) {
-        topVC = topVC.presentedViewController;
+    // 遍历所有窗口，找到最顶层的 VC
+    for (UIWindow *window in [UIApplication sharedApplication].windows) {
+        if (window.isHidden) continue;
+        if (window.rootViewController) {
+            UIViewController *topVC = window.rootViewController;
+            while (topVC.presentedViewController) {
+                topVC = topVC.presentedViewController;
+            }
+            return topVC;
+        }
     }
-    return topVC;
+    return nil;
 }
 
-// ============================================
-// 设置界面 UI
-// ============================================
+// === UI 设置界面 ===
 @interface DBSettingsViewController : UIViewController <UITableViewDelegate, UITableViewDataSource, UITextFieldDelegate>
 @property (nonatomic, strong) UITableView *tableView;
 @property (nonatomic, strong) UITextField *inputField;
@@ -157,80 +152,64 @@ static UIViewController *getTopVC() {
 
 @end
 
-// ============================================
-// 手势识别 - 使用 Class Hook 而非实例 Hook
-// ============================================
-%group SpringBoardHooks
+// === 手势处理类 ===
+@interface DBGestureHandler : NSObject
++ (void)handleTouches:(NSSet *)touches withEvent:(UIEvent *)event;
+@end
 
-// 使用全局变量存储 timer
+@implementation DBGestureHandler
+
 static NSTimer *g_longPressTimer = nil;
 static NSInteger g_activeTouchesCount = 0;
 
-// 创建单独的类来处理手势逻辑
-@interface SBTouchHandler : NSObject
-+ (void)handleTouchesBegan:(NSSet *)touches withEvent:(UIEvent *)event inSpringBoard:(id)sb;
-+ (void)handleTouchesMoved:(NSSet *)touches withEvent:(UIEvent *)event inSpringBoard:(id)sb;
-+ (void)handleTouchesEnded:(NSSet *)touches withEvent:(UIEvent *)event inSpringBoard:(id)sb;
-@end
-
-@implementation SBTouchHandler
-
-+ (void)handleTouchesBegan:(NSSet *)touches withEvent:(UIEvent *)event inSpringBoard:(id)sb {
++ (void)handleTouches:(NSSet *)touches withEvent:(UIEvent *)event {
     if (touches.count == 3) {
         g_activeTouchesCount = 3;
         if (g_longPressTimer) [g_longPressTimer invalidate];
         g_longPressTimer = [NSTimer scheduledTimerWithTimeInterval:0.6 target:self selector:@selector(triggerGesture) userInfo:nil repeats:NO];
-    }
-}
-
-+ (void)triggerGesture {
-    loadKeywords();
-    DBSettingsViewController *settingsVC = [[DBSettingsViewController alloc] init];
-    UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:settingsVC];
-    nav.modalPresentationStyle = UIModalPresentationOverCurrentContext;
-    nav.view.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.4];
-    [getTopVC() presentViewController:nav animated:YES completion:nil];
-}
-
-+ (void)handleTouchesMoved:(NSSet *)touches withEvent:(UIEvent *)event inSpringBoard:(id)sb {
-    if (g_activeTouchesCount != 3 || touches.count != 3) {
+    } else {
         if (g_longPressTimer) { [g_longPressTimer invalidate]; g_longPressTimer = nil; }
         g_activeTouchesCount = touches.count;
     }
 }
 
-+ (void)handleTouchesEnded:(NSSet *)touches withEvent:(UIEvent *)event inSpringBoard:(id)sb {
-    if (g_longPressTimer) { [g_longPressTimer invalidate]; g_longPressTimer = nil; }
-    g_activeTouchesCount = touches.count;
++ (void)triggerGesture {
+    NSLog(@"[DomainBlocker] Gesture triggered! Opening UI...");
+    loadKeywords();
+    DBSettingsViewController *settingsVC = [[DBSettingsViewController alloc] init];
+    UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:settingsVC];
+    nav.modalPresentationStyle = UIModalPresentationOverCurrentContext;
+    nav.view.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.4];
+    
+    UIViewController *topVC = getTopVC();
+    NSLog(@"[DomainBlocker] Top VC: %@", topVC);
+    
+    if (topVC) {
+        [topVC presentViewController:nav animated:YES completion:nil];
+        NSLog(@"[DomainBlocker] UI presented successfully");
+    } else {
+        NSLog(@"[DomainBlocker] Failed to get top VC!");
+    }
 }
 
 @end
 
-// Hook SpringBoard 的触摸方法
-%hook SpringBoard
+// === Hook 所有 App 的 UIWindow ===
+%hook UIWindow
 
-- (void)touchesBegan:(NSSet *)touches withEvent:(UIEvent *)event {
+- (void)sendEvent:(UIEvent *)event {
     %orig;
-    [SBTouchHandler handleTouchesBegan:touches withEvent:event inSpringBoard:self];
-}
-
-- (void)touchesMoved:(NSSet *)touches withEvent:(UIEvent *)event {
-    %orig;
-    [SBTouchHandler handleTouchesMoved:touches withEvent:event inSpringBoard:self];
-}
-
-- (void)touchesEnded:(NSSet *)touches withEvent:(UIEvent *)event {
-    %orig;
-    [SBTouchHandler handleTouchesEnded:touches withEvent:event inSpringBoard:self];
+    
+    NSSet *touches = event.allTouches;
+    if (touches && touches.count > 0) {
+        // 检测三指长按
+        [DBGestureHandler handleTouches:touches withEvent:event];
+    }
 }
 
 %end
 
-%end
-
-// ============================================
-// 网络拦截
-// ============================================
+// === 网络拦截 ===
 %group NSURLSessionHooks
 %hook NSURLSession
 
@@ -255,13 +234,7 @@ static NSInteger g_activeTouchesCount = 0;
 %end
 %end
 
-// ============================================
-// 入口点
-// ============================================
 %ctor {
     loadKeywords();
     %init(NSURLSessionHooks);
-    if ([[[NSProcessInfo processInfo] processName] isEqualToString:@"SpringBoard"]) {
-        %init(SpringBoardHooks);
-    }
 }
