@@ -18,6 +18,12 @@ jobs:
       - name: Install Dependencies
         run: |
           brew install ldid dpkg make
+          
+      - name: Install ldid
+        run: |
+          brew install ldid
+          ldid -v
+          echo "ldid version: $(ldid -v)"
 
       - name: Setup Theos
         run: |
