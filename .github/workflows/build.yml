@@ -12,18 +12,16 @@ jobs:
       # === 修复：正确设置 Homebrew 路径 ===
       - name: Set up Homebrew PATH
         run: |
-          # 确保 Homebrew 路径在 PATH 中
           echo "PATH=/opt/homebrew/bin:/usr/local/bin:$PATH" >> $GITHUB_ENV
           echo "PATH after setup: $PATH"
           which ldid || echo "ldid not found (will install now)"
       
-      # === 安装 ldid（关键修复）===
+      # === 安装 ldid（关键修复：移除错误的 ldid -v 调用）===
       - name: Install ldid
         run: |
           brew install ldid
           which ldid  # 确认路径
-          ldid -v
-          echo "ldid version: $(ldid -v)"
+          echo "ldid installed successfully at $(which ldid)"
       
       # === 安装 Theos ===
       - name: Set up Theos
@@ -45,7 +43,7 @@ jobs:
       
       # === 上传构建产物（v4 版本）===
       - name: Upload Artifact
-        uses: actions/upload-artifact@v4  # 使用 v4 版本
+        uses: actions/upload-artifact@v4
         with:
           name: DomainBlocker
           path: DomainBlocker/*.deb
