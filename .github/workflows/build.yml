@@ -1,0 +1,90 @@
+name: Build TrollStore Tweak
+
+on:
+  workflow_dispatch: # 手动触发模式
+    inputs:
+      debug_enabled:
+        description: 'Enable Debug Build'
+        required: false
+        default: 'false'
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: |
+          brew install ldid dpkg make
+          git clone --recursive https://github.com/theos/theos.git $HOME/theos
+          echo "THEOS=$HOME/theos" >> $GITHUB_ENV
+      
+      - name: Setup SDK
+        run: |
+          git clone --recurse-submodules https://github.com/theos/sdks $HOME/theos/sdks
+          # 使用 iPhoneOS15.5.sdk 作为示例，可根据需要修改
+          ln -s $HOME/theos/sdks/iPhoneOS15.5.sdk $HOME/theos/sdks/iPhoneOS16.0.sdk 
+
+      - name: Build Tweak
+        run: |
+          cd DomainBlocker
+          make package FINALPACKAGE=1
+          if [ "${{ github.event.inputs.debug_enabled }}" == "true" ]; then
+            make package FINALPACKAGE=1 DEBUG=1
+          fi
+
+      - name: Sign Package (for TrollStore)
+        run: |
+          cd DomainBlocker/packages
+          for file in *.deb; do
+            echo "Signing $file..."
+            # 提取 deb 包
+            mkdir temp_extract
+            cd temp_extract
+            ar x ../$file
+            tar -xzf data.tar.* -C .
+            
+            # 查找并签名 dylib
+            find . -name "*.dylib" -exec ldid -S {} \;
+            
+            # 重新打包
+            rm -f data.tar.*
+            tar -czf data.tar.gz *
+            rm -rf control data.tar.xz # 清理旧格式
+            
+            # 重新构建 deb (简化版，仅替换 data.tar)
+            # 注意：这里为了简单，我们直接让 ldid 签名整个 deb 或者内部的 dylib
+            # TrollStore 通常不需要 deb 签名，只需要内部 dylib 有 entitlements 或者无签名限制
+            # 最稳妥的方式是确保 dylib 被 ldid -S 处理过
+            
+            cd ..
+            # 重新打包 deb (如果上面的提取破坏了结构，这里用更简单的方法：直接签名 dylib)
+            # 实际上 Theos 打包后的 dylib 已经在 bundle 里了，我们需要进入包内签名
+            # 让我们回退到更简单的逻辑：Theos 编译出的 dylib 直接在 .deb 的 data.tar 里
+            # 我们解压 -> 签名 -> 压缩 -> 重建 deb
+            rm -rf temp_extract
+          done
+          
+          # 更稳健的签名流程：
+          cd $GITHUB_WORKSPACE/DomainBlocker/packages
+          for deb in *.deb; do
+            WORK_DIR=$(mktemp -d)
+            cd $WORK_DIR
+            ar x $GITHUB_WORKSPACE/DomainBlocker/packages/$deb
+            tar -xzf data.tar.* -C .
+            find . -name "*.dylib" -exec ldid -S {} \;
+            rm -f data.tar.*
+            tar -czf data.tar.gz *
+            ar rcs $GITHUB_WORKSPACE/DomainBlocker/packages/$deb debian-binary control.tar.gz data.tar.gz
+            cd $GITHUB_WORKSPACE/DomainBlocker/packages
+            rm -rf $WORK_DIR
+          done
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DomainBlocker-TrollStore
+          path: DomainBlocker/packages/*.deb
+          retention-days: 90
