@@ -269,16 +269,28 @@ static UIViewController *getTopVC() {
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
     static NSString *cellID = @"Cell";
     UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:cellID];
+    
     if (!cell) {
         cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:cellID];
         cell.backgroundColor = [UIColor whiteColor];
         cell.textLabel.font = [UIFont systemFontOfSize:13];
+        
+        // 选中背景色
         UIView *bgView = [[UIView alloc] init];
         bgView.backgroundColor = [[UIColor systemBlueColor] colorWithAlphaComponent:0.08];
         cell.selectedBackgroundView = bgView;
+        
+        // === 关键修复：移除默认缩进，实现完美左对齐 ===
+        cell.preservesSuperviewLayoutMargins = NO;
+        cell.layoutMargins = UIEdgeInsetsZero;
+        cell.separatorInset = UIEdgeInsetsZero;
+        
+        // 确保文字标签也从 0 开始
+        cell.textLabel.translatesAutoresizingMaskIntoConstraints = NO;
+        // 这里不需要手动设置 frame，因为系统会自动处理，只要 margins 设为 0 即可
     }
     
-    // === 添加序号 ===
+    // 生成带序号的文本
     NSInteger rowNum = indexPath.row + 1;
     NSString *keyword = blockedKeywords[indexPath.row];
     cell.textLabel.text = [NSString stringWithFormat:@"%ld. %@", (long)rowNum, keyword];
