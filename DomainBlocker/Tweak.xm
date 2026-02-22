@@ -277,8 +277,13 @@ static UIViewController *getTopVC() {
         bgView.backgroundColor = [[UIColor systemBlueColor] colorWithAlphaComponent:0.08];
         cell.selectedBackgroundView = bgView;
     }
-    cell.textLabel.text = blockedKeywords[indexPath.row];
+    
+    // === 添加序号 ===
+    NSInteger rowNum = indexPath.row + 1;
+    NSString *keyword = blockedKeywords[indexPath.row];
+    cell.textLabel.text = [NSString stringWithFormat:@"%ld. %@", (long)rowNum, keyword];
     cell.textLabel.textColor = [UIColor blackColor];
+    
     return cell;
 }
 
