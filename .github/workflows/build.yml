@@ -1,26 +1,27 @@
 name: Build DomainBlocker Tweak
 
 on:
-  push:
-    branches: [ main ]
-  workflow_dispatch:
+  workflow_dispatch:  # 仅手动触发（不再自动运行）
 
 jobs:
   build:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      
-      # === 修复：添加 Homebrew 路径到 PATH ===
+
+      # === 修复：正确设置 Homebrew 路径 ===
       - name: Set up Homebrew PATH
         run: |
+          # 确保 Homebrew 路径在 PATH 中
           echo "PATH=/opt/homebrew/bin:/usr/local/bin:$PATH" >> $GITHUB_ENV
-          echo "Homebrew PATH set to: $PATH"
+          echo "PATH after setup: $PATH"
+          which ldid || echo "ldid not found (will install now)"
       
-      # === 安装 ldid ===
+      # === 安装 ldid（关键修复）===
       - name: Install ldid
         run: |
           brew install ldid
+          which ldid  # 确认路径
           ldid -v
           echo "ldid version: $(ldid -v)"
       
@@ -30,6 +31,7 @@ jobs:
           brew install theos
           echo "THEOS=$HOME/theos" >> $GITHUB_ENV
           echo "PATH=$HOME/theos/bin:$PATH" >> $GITHUB_ENV
+          which ldid  # 确认 ldid 在 PATH 中
           theos --version
       
       # === 构建 DomainBlocker ===
@@ -41,9 +43,9 @@ jobs:
           mv *.deb domainblocker.deb
           echo "DEB_FILE=domainblocker.deb" >> $GITHUB_ENV
       
-      # === 上传构建产物 ===
+      # === 上传构建产物（v4 版本）===
       - name: Upload Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4  # 使用 v4 版本
         with:
           name: DomainBlocker
           path: DomainBlocker/*.deb
