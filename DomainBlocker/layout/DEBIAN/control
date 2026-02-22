@@ -1,6 +1,6 @@
 Package: com.8507.domainblocker
 Name: DomainBlocker
-Version: 1.0.2
+Version: 1.0.3
 Architecture: iphoneos-arm64
 Description: 域名屏蔽器 - 三指长按屏蔽指定域名
 Maintainer: lrx8507
