@@ -25,9 +25,7 @@ static BOOL isUrlBlocked(NSURL *url) {
     return NO;
 }
 
-// === 修复：适配普通 App 的 getTopVC ===
 static UIViewController *getTopVC() {
-    // 遍历所有窗口，找到最顶层的 VC
     for (UIWindow *window in [UIApplication sharedApplication].windows) {
         if (window.isHidden) continue;
         if (window.rootViewController) {
@@ -41,7 +39,6 @@ static UIViewController *getTopVC() {
     return nil;
 }
 
-// === UI 设置界面 ===
 @interface DBSettingsViewController : UIViewController <UITableViewDelegate, UITableViewDataSource, UITextFieldDelegate>
 @property (nonatomic, strong) UITableView *tableView;
 @property (nonatomic, strong) UITextField *inputField;
@@ -152,7 +149,6 @@ static UIViewController *getTopVC() {
 
 @end
 
-// === 手势处理类 ===
 @interface DBGestureHandler : NSObject
 + (void)handleTouches:(NSSet *)touches withEvent:(UIEvent *)event;
 @end
@@ -194,25 +190,20 @@ static NSInteger g_activeTouchesCount = 0;
 
 @end
 
-// === Hook 所有 App 的 UIWindow ===
-%hook UIWindow
+// === 所有 Hook 放入同一个 group ===
+%group DomainBlockerHooks
 
+%hook UIWindow
 - (void)sendEvent:(UIEvent *)event {
     %orig;
-    
     NSSet *touches = event.allTouches;
     if (touches && touches.count > 0) {
-        // 检测三指长按
         [DBGestureHandler handleTouches:touches withEvent:event];
     }
 }
-
 %end
 
-// === 网络拦截 ===
-%group NSURLSessionHooks
 %hook NSURLSession
-
 - (NSURLSessionDataTask *)dataTaskWithURL:(NSURL *)url completionHandler:(void (^)(NSData *, NSURLResponse *, NSError *))completionHandler {
     if (isUrlBlocked(url)) {
         NSError *err = [NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorNotConnectedToInternet userInfo:@{NSLocalizedDescriptionKey: @"该域名已被屏蔽"}];
@@ -230,11 +221,12 @@ static NSInteger g_activeTouchesCount = 0;
     }
     return %orig;
 }
-
-%end
 %end
 
+%end
+
+// === 入口点：初始化 group ===
 %ctor {
     loadKeywords();
-    %init(NSURLSessionHooks);
+    %init(DomainBlockerHooks);
 }
