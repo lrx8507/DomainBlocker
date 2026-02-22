@@ -1,41 +1,44 @@
 #import <UIKit/UIKit.h>
 #import <Foundation/Foundation.h>
 
+// ================= 配置区域 =================
 static NSString * const kStorageKey = @"DB_BlockedKeywords";
 static NSMutableArray *blockedKeywords = nil;
+
+#define DEBUG_LOG 1
+
+#if DEBUG_LOG
+#define RLog(...) NSLog(@"[DomainBlocker] " __VA_ARGS__)
+#else
+#define RLog(...)
+#endif
+
+// ================= 辅助函数 =================
 
 static void loadKeywords() {
     if (blockedKeywords) return;
     NSArray *saved = [[NSUserDefaults standardUserDefaults] objectForKey:kStorageKey];
     blockedKeywords = saved ? [saved mutableCopy] : [NSMutableArray array];
+    RLog(@"✅ 加载 %lu 个关键词", (unsigned long)blockedKeywords.count);
 }
 
 static void saveKeywords() {
     [[NSUserDefaults standardUserDefaults] setObject:blockedKeywords forKey:kStorageKey];
     [[NSUserDefaults standardUserDefaults] synchronize];
+    RLog(@"💾 保存关键词完成");
 }
 
-// === 修复：更全面的 URL 匹配逻辑 ===
-static BOOL isUrlBlocked(NSURL *url) {
-    if (!url) return NO;
+// 统一的检查函数（参考您的核心逻辑）
+static BOOL shouldBlockURL(NSString *urlString) {
+    if (!urlString || urlString.length == 0) return NO;
     
-    NSString *absoluteString = url.absoluteString.lowercaseString;
-    NSString *host = url.host ? url.host.lowercaseString : @"";
-    NSString *path = url.path ? url.path.lowercaseString : @"";
-    NSString *query = url.query ? url.query.lowercaseString : @"";
-    
-    NSLog(@"[DomainBlocker] Checking URL: %@", absoluteString);
+    NSString *lowerUrl = [urlString lowercaseString];
     
     for (NSString *keyword in blockedKeywords) {
-        if (keyword.length == 0) continue;
-        NSString *lowerKeyword = keyword.lowercaseString;
+        NSString *lowerKeyword = [keyword lowercaseString];
         
-        // 检查完整 URL、host、path、query
-        if ([absoluteString containsString:lowerKeyword] ||
-            [host containsString:lowerKeyword] ||
-            [path containsString:lowerKeyword] ||
-            [query containsString:lowerKeyword]) {
-            NSLog(@"[DomainBlocker] BLOCKED: %@ (keyword: %@)", absoluteString, keyword);
+        if ([lowerUrl containsString:lowerKeyword]) {
+            RLog(@"🚫 拦截请求：[%@] 命中规则：%@", urlString, keyword);
             return YES;
         }
     }
@@ -56,11 +59,10 @@ static UIViewController *getTopVC() {
     return nil;
 }
 
-// === UI 设置界面 ===
+// ================= UI 设置界面 =================
 @interface DBSettingsViewController : UIViewController <UITableViewDelegate, UITableViewDataSource, UITextFieldDelegate>
 @property (nonatomic, strong) UITableView *tableView;
 @property (nonatomic, strong) UITextField *inputField;
-@property (nonatomic, strong) UIButton *closeButton;
 @end
 
 @implementation DBSettingsViewController
@@ -70,7 +72,7 @@ static UIViewController *getTopVC() {
     self.view.backgroundColor = [UIColor colorWithRed:0.95 green:0.95 blue:0.97 alpha:1.0];
     self.title = @"域名屏蔽器";
     
-    // === 添加关闭按钮（右上角）===
+    // 右上角关闭按钮
     self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] 
         initWithTitle:@"完成" 
         style:UIBarButtonItemStyleDone 
@@ -99,7 +101,7 @@ static UIViewController *getTopVC() {
     self.inputField = [[UITextField alloc] initWithFrame:CGRectMake(16, 44, inputContainer.bounds.size.width - 110, 40)];
     self.inputField.borderStyle = UITextBorderStyleNone;
     self.inputField.font = [UIFont systemFontOfSize:16];
-    self.inputField.placeholder = @"例如：ads, tracker";
+    self.inputField.placeholder = @"例如：/ad/, tracker";
     self.inputField.delegate = self;
     [inputContainer addSubview:self.inputField];
     
@@ -123,19 +125,19 @@ static UIViewController *getTopVC() {
     [self.view addSubview:self.tableView];
     
     // 底部关闭按钮
-    self.closeButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    self.closeButton.frame = CGRectMake(16, self.view.bounds.size.height - 80, self.view.bounds.size.width - 32, 50);
-    [self.closeButton setTitle:@"关闭设置" forState:UIControlStateNormal];
-    self.closeButton.titleLabel.font = [UIFont boldSystemFontOfSize:16];
-    self.closeButton.backgroundColor = [UIColor systemRedColor];
-    [self.closeButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
-    self.closeButton.layer.cornerRadius = 10;
-    [self.closeButton addTarget:self action:@selector(closeSettings) forControlEvents:UIControlEventTouchUpInside];
-    [self.view addSubview:self.closeButton];
+    UIButton *closeBtn = [UIButton buttonWithType:UIButtonTypeSystem];
+    closeBtn.frame = CGRectMake(16, self.view.bounds.size.height - 80, self.view.bounds.size.width - 32, 50);
+    [closeBtn setTitle:@"关闭设置" forState:UIControlStateNormal];
+    closeBtn.titleLabel.font = [UIFont boldSystemFontOfSize:16];
+    closeBtn.backgroundColor = [UIColor systemRedColor];
+    [closeBtn setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+    closeBtn.layer.cornerRadius = 10;
+    [closeBtn addTarget:self action:@selector(closeSettings) forControlEvents:UIControlEventTouchUpInside];
+    [self.view addSubview:closeBtn];
     
     // 使用说明
     UILabel *infoLabel = [[UILabel alloc] init];
-    infoLabel.text = @"💡 提示：关键词会匹配 URL 的任何部分（域名、路径、参数）";
+    infoLabel.text = @"💡 关键词会匹配 URL 的任何部分（域名、路径、参数）";
     infoLabel.font = [UIFont italicSystemFontOfSize:12];
     infoLabel.textColor = [UIColor grayColor];
     infoLabel.textAlignment = NSTextAlignmentCenter;
@@ -145,7 +147,7 @@ static UIViewController *getTopVC() {
 }
 
 - (void)closeSettings {
-    NSLog(@"[DomainBlocker] Closing settings UI");
+    RLog(@"关闭设置 UI");
     [self.navigationController dismissViewControllerAnimated:YES completion:nil];
 }
 
@@ -196,7 +198,7 @@ static UIViewController *getTopVC() {
 
 @end
 
-// === 手势处理类 ===
+// ================= 手势处理 =================
 @interface DBGestureHandler : NSObject
 + (void)handleTouches:(NSSet *)touches withEvent:(UIEvent *)event;
 @end
@@ -218,9 +220,8 @@ static NSInteger g_activeTouchesCount = 0;
 }
 
 + (void)triggerGesture {
-    NSLog(@"[DomainBlocker] Gesture triggered! Opening UI...");
+    RLog(@"👆 三指长按触发！");
     loadKeywords();
-    NSLog(@"[DomainBlocker] Loaded %lu keywords", (unsigned long)blockedKeywords.count);
     
     DBSettingsViewController *settingsVC = [[DBSettingsViewController alloc] init];
     UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:settingsVC];
@@ -230,17 +231,16 @@ static NSInteger g_activeTouchesCount = 0;
     UIViewController *topVC = getTopVC();
     if (topVC) {
         [topVC presentViewController:nav animated:YES completion:nil];
-        NSLog(@"[DomainBlocker] UI presented successfully");
-    } else {
-        NSLog(@"[DomainBlocker] Failed to get top VC!");
+        RLog(@"✅ UI 已显示");
     }
 }
 
 @end
 
-// === 所有 Hook 放入同一个 group ===
+// ================= Hook 区域 =================
 %group DomainBlockerHooks
 
+// Hook UIWindow - 手势识别
 %hook UIWindow
 - (void)sendEvent:(UIEvent *)event {
     %orig;
@@ -251,11 +251,53 @@ static NSInteger g_activeTouchesCount = 0;
 }
 %end
 
-// === 修复：更全面的网络拦截 ===
+// ================= 核心拦截逻辑（参考您的代码）=================
+
+// Hook 1: 拦截 URL 对象创建
+%hook NSURL
+
++ (instancetype)URLWithString:(NSString *)URLString {
+    if (shouldBlockURL(URLString)) {
+        return nil;
+    }
+    return %orig;
+}
+
+- (instancetype)initWithString:(NSString *)URLString {
+    if (shouldBlockURL(URLString)) {
+        return nil;
+    }
+    return %orig;
+}
+
+%end
+
+// Hook 2: 拦截 URLRequest
+%hook NSURLRequest
+
++ (instancetype)requestWithURL:(NSURL *)URL {
+    if (shouldBlockURL(URL.absoluteString)) {
+        return nil;
+    }
+    return %orig;
+}
+
+- (instancetype)initWithURL:(NSURL *)URL {
+    if (shouldBlockURL(URL.absoluteString)) {
+        return nil;
+    }
+    return %orig;
+}
+
+%end
+
+// Hook 3: 拦截 NSURLSession（额外保障）
 %hook NSURLSession
+
 - (NSURLSessionDataTask *)dataTaskWithURL:(NSURL *)url completionHandler:(void (^)(NSData *, NSURLResponse *, NSError *))completionHandler {
-    if (isUrlBlocked(url)) {
-        NSError *err = [NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorNotConnectedToInternet userInfo:@{NSLocalizedDescriptionKey: @"该域名已被 DomainBlocker 屏蔽"}];
+    if (shouldBlockURL(url.absoluteString)) {
+        RLog(@"🚫 NSURLSession 拦截：%@", url.absoluteString);
+        NSError *err = [NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorNotConnectedToInternet userInfo:@{NSLocalizedDescriptionKey: @"该域名已被屏蔽"}];
         if (completionHandler) completionHandler(nil, nil, err);
         return nil;
     }
@@ -263,31 +305,22 @@ static NSInteger g_activeTouchesCount = 0;
 }
 
 - (NSURLSessionDataTask *)dataTaskWithRequest:(NSURLRequest *)request completionHandler:(void (^)(NSData *, NSURLResponse *, NSError *))completionHandler {
-    if (isUrlBlocked(request.URL)) {
-        NSError *err = [NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorNotConnectedToInternet userInfo:@{NSLocalizedDescriptionKey: @"该域名已被 DomainBlocker 屏蔽"}];
+    if (shouldBlockURL(request.URL.absoluteString)) {
+        RLog(@"🚫 NSURLSession 拦截：%@", request.URL.absoluteString);
+        NSError *err = [NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorNotConnectedToInternet userInfo:@{NSLocalizedDescriptionKey: @"该域名已被屏蔽"}];
         if (completionHandler) completionHandler(nil, nil, err);
         return nil;
     }
     return %orig;
 }
-%end
 
-// === 额外 Hook：NSURLConnection (兼容旧 App) ===
-%hook NSURLConnection
-+ (instancetype)connectionWithRequest:(NSURLRequest *)request delegate:(id)delegate {
-    if (isUrlBlocked(request.URL)) {
-        NSLog(@"[DomainBlocker] Blocked NSURLConnection: %@", request.URL.absoluteString);
-        return nil;
-    }
-    return %orig;
-}
 %end
 
 %end
 
-// === 入口点 ===
+// ================= 入口点 =================
 %ctor {
     loadKeywords();
-    NSLog(@"[DomainBlocker] Plugin loaded, %lu keywords", (unsigned long)blockedKeywords.count);
+    RLog(@"🔌 插件已加载");
     %init(DomainBlockerHooks);
 }
