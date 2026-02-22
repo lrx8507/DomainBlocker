@@ -14,11 +14,14 @@ jobs:
         run: |
           brew install ldid
           brew install xz
+          which ldid  # 确认 ldid 已安装
+          echo "ldid path: $(which ldid)"
       
       - name: Setup Theos
         run: |
           git clone --recursive https://github.com/theos/theos.git $HOME/theos
           echo "THEOS=$HOME/theos" >> $GITHUB_ENV
+          echo "PATH=$HOME/theos/bin:$PATH" >> $GITHUB_ENV
           rm -rf $HOME/theos/sdks
           git clone https://github.com/xybp888/iOS-SDKs $HOME/theos/sdks
           cd $HOME/theos/sdks
@@ -28,7 +31,7 @@ jobs:
       - name: Build Tweak
         run: |
           cd DomainBlocker
-          make package FINALPACKAGE=1 NOSIGNING=1 DEBUG=0
+          make package FINALPACKAGE=1 NO_SIGNING=1 DEBUG=0  # 修复：使用 NO_SIGNING=1 而不是 NOSIGNING=1
           ls -l *.deb
           mv *.deb domainblocker.deb
           echo "DEB_FILE=domainblocker.deb" >> $GITHUB_ENV
