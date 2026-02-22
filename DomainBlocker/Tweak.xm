@@ -27,13 +27,13 @@ static void loadKeywords() {
         blockLogs = [NSMutableArray array];
     }
     
-    RLog(@"✅ 加载 %lu 个关键词", (unsigned long)blockedKeywords.count);
+    RLog(@"加载 %lu 个关键词", (unsigned long)blockedKeywords.count);
 }
 
 static void saveKeywords() {
     [[NSUserDefaults standardUserDefaults] setObject:blockedKeywords forKey:kStorageKey];
     [[NSUserDefaults standardUserDefaults] synchronize];
-    RLog(@"💾 关键词已保存");
+    RLog(@"关键词已保存");
 }
 
 static void addLogEntry(NSString *url, NSString *keyword) {
@@ -49,7 +49,7 @@ static void addLogEntry(NSString *url, NSString *keyword) {
         [blockLogs removeObjectAtIndex:0];
     }
     
-    RLog(@"📝 记录日志：%@", logEntry);
+    RLog(@"记录日志：%@", logEntry);
 }
 
 static BOOL shouldBlockURL(NSString *urlString) {
@@ -58,7 +58,7 @@ static BOOL shouldBlockURL(NSString *urlString) {
     for (NSString *keyword in blockedKeywords) {
         NSString *lowerKeyword = [keyword lowercaseString];
         if ([lowerUrl containsString:lowerKeyword]) {
-            RLog(@"🚫 拦截请求：[%@] 命中规则：%@", urlString, keyword);
+            RLog(@"拦截请求：[%@] 命中规则：%@", urlString, keyword);
             addLogEntry(urlString, keyword);
             return YES;
         }
@@ -126,7 +126,7 @@ static UIViewController *getTopVC() {
     [self.popupContainer addSubview:headerView];
     
     UILabel *titleLabel = [[UILabel alloc] initWithFrame:CGRectMake(20, 0, popupWidth - 100, 50)];
-    titleLabel.text = @"🛡️ 域名屏蔽器";
+    titleLabel.text = @"域名屏蔽器";
     titleLabel.font = [UIFont boldSystemFontOfSize:18];
     titleLabel.textColor = [UIColor blackColor];
     [headerView addSubview:titleLabel];
@@ -174,7 +174,7 @@ static UIViewController *getTopVC() {
     // === 列表标题 ===
     CGFloat listTitleY = inputY + inputHeight + 10;
     self.listTitleLabel = [[UILabel alloc] initWithFrame:CGRectMake(20, listTitleY, popupWidth - 40, 20)];
-    self.listTitleLabel.text = @"📋 已屏蔽域名的关键词";
+    self.listTitleLabel.text = @"已屏蔽域名的关键词";
     self.listTitleLabel.font = [UIFont boldSystemFontOfSize:13];
     self.listTitleLabel.textColor = [UIColor darkGrayColor];
     [self.popupContainer addSubview:self.listTitleLabel];
@@ -249,7 +249,7 @@ static UIViewController *getTopVC() {
         self.tableView.backgroundView = nil;
         
         UILabel *toast = [[UILabel alloc] init];
-        toast.text = @"✅ 已添加";
+        toast.text = @"已添加";
         toast.font = [UIFont systemFontOfSize:12];
         toast.textColor = [UIColor whiteColor];
         toast.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.7];
@@ -337,7 +337,7 @@ static NSInteger g_activeTouchesCount = 0;
 }
 
 + (void)triggerGesture {
-    RLog(@"👆 三指长按触发！");
+    RLog(@"三指长按触发！");
     loadKeywords();
     
     DBPopupViewController *popupVC = [[DBPopupViewController alloc] init];
@@ -413,6 +413,6 @@ static NSInteger g_activeTouchesCount = 0;
     loadKeywords();
     // 日志数组每次插件加载时重置为空（不持久化）
     blockLogs = [NSMutableArray array];
-    RLog(@"🔌 插件已加载，日志已清空");
+    RLog(@"插件已加载，日志已清空");
     %init(DomainBlockerHooks);
 }
