@@ -21,23 +21,22 @@ jobs:
 
       - name: Setup Theos
         run: |
+          # 清理已存在的 theos 目录
+          rm -rf $HOME/theos
           git clone --recursive https://github.com/theos/theos.git $HOME/theos
           echo "THEOS=$HOME/theos" >> $GITHUB_ENV
 
       - name: Setup SDK
         run: |
-          # 检查 SDK 目录是否已存在
-          if [ -d "$HOME/theos/sdks/iPhoneOS15.5.sdk" ]; then
-            echo "SDK already exists, skipping download..."
-          else
-            echo "Downloading SDK..."
-            git clone --recurse-submodules https://github.com/theos/sdks $HOME/theos/sdks
-          fi
+          # 清理已存在的 sdk 目录
+          rm -rf $HOME/theos/sdks
+          mkdir -p $HOME/theos/sdks
           
-          # 创建符号链接（如果目标不存在）
-          if [ ! -L "$HOME/theos/sdks/iPhoneOS16.0.sdk" ]; then
-            ln -s $HOME/theos/sdks/iPhoneOS15.5.sdk $HOME/theos/sdks/iPhoneOS16.0.sdk
-          fi
+          # 下载 SDK
+          git clone --recurse-submodules https://github.com/theos/sdks $HOME/theos/sdks
+          
+          # 创建符号链接
+          ln -s $HOME/theos/sdks/iPhoneOS15.5.sdk $HOME/theos/sdks/iPhoneOS16.0.sdk
           
           # 列出 SDK 目录内容用于调试
           ls -la $HOME/theos/sdks/
