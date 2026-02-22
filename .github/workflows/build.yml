@@ -18,17 +18,20 @@ jobs:
       
       - name: Setup Theos
         run: |
-          # 安装 Theos (使用 git clone 代替 brew)
+          # 1. 安装 Theos (使用 git clone)
           git clone --recursive https://github.com/theos/theos.git $HOME/theos
           echo "THEOS=$HOME/theos" >> $GITHUB_ENV
           echo "PATH=$HOME/theos/bin:$PATH" >> $GITHUB_ENV
           
-          # 配置 Theos 环境 (关键修复：设置 NO_SIGNING)
+          # 2. 创建并配置 ~/.theos/rc.mk (关键修复！)
           mkdir -p ~/.theos
-          echo "NO_SIGNING = 1" >> ~/.theos/rc.mk
+          echo "NO_SIGNING = 1" > ~/.theos/rc.mk
           echo "THEOS_IGNORE_PARALLEL_BUILDING_NOTICE = yes" >> ~/.theos/rc.mk
           
-          # 设置 SDK
+          # 3. 验证 rc.mk 内容
+          cat ~/.theos/rc.mk
+          
+          # 4. 设置 SDK
           rm -rf $HOME/theos/sdks
           git clone https://github.com/xybp888/iOS-SDKs $HOME/theos/sdks
           cd $HOME/theos/sdks
