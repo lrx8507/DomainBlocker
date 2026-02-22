@@ -41,6 +41,27 @@ static BOOL isUrlBlocked(NSURL *url) {
     return NO;
 }
 
+// --- 辅助函数：获取顶层 ViewController ---
+static UIViewController *getTopViewController() {
+    UIViewController *topVC = [UIApplication sharedApplication].keyWindow.rootViewController;
+    while (topVC.presentedViewController) {
+        topVC = topVC.presentedViewController;
+    }
+    return topVC;
+}
+
+// --- 辅助函数：显示提示 ---
+static void showToast(NSString *message) {
+    UIViewController *topVC = getTopViewController();
+    
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"成功" 
+                                                                   message:message 
+                                                            preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:nil]];
+    
+    [topVC presentViewController:alert animated:YES completion:nil];
+}
+
 // --- UI 部分：简洁美观的设置界面 ---
 @interface DBSettingsViewController : UIViewController <UITableViewDelegate, UITableViewDataSource, UITextFieldDelegate>
 @property (nonatomic, strong) UITableView *tableView;
@@ -115,8 +136,7 @@ static BOOL isUrlBlocked(NSURL *url) {
         [self.inputField resignFirstResponder];
         [self.tableView reloadData];
         
-        UIAlertView *alert = [[UIAlertView alloc] initWithTitle:@"成功" message:@"关键词已保存" delegate:nil cancelButtonTitle:@"确定" otherButtonTitles:nil];
-        [alert show];
+        showToast(@"关键词已保存");
     }
 }
 
@@ -176,10 +196,7 @@ static NSInteger activeTouchesCount = 0;
         nav.modalPresentationStyle = UIModalPresentationOverCurrentContext;
         nav.view.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.4];
         
-        UIViewController *topVC = self.window.rootViewController;
-        while (topVC.presentedViewController) {
-            topVC = topVC.presentedViewController;
-        }
+        UIViewController *topVC = getTopViewController();
         
         [topVC presentViewController:nav animated:YES completion:nil];
     }
