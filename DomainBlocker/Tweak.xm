@@ -1,6 +1,15 @@
 #import <UIKit/UIKit.h>
 #import <Foundation/Foundation.h>
 
+// ============================================
+// SpringBoard 私有类声明
+// ============================================
+@interface SpringBoard : UIApplication
+@end
+
+// ============================================
+// 全局变量和辅助函数
+// ============================================
 static NSString * const kStorageKey = @"DB_BlockedKeywords";
 static NSMutableArray *blockedKeywords = nil;
 
@@ -35,6 +44,9 @@ static UIViewController *getTopVC() {
     return topVC;
 }
 
+// ============================================
+// 设置界面 UI
+// ============================================
 @interface DBSettingsViewController : UIViewController <UITableViewDelegate, UITableViewDataSource, UITextFieldDelegate>
 @property (nonatomic, strong) UITableView *tableView;
 @property (nonatomic, strong) UITextField *inputField;
@@ -145,55 +157,80 @@ static UIViewController *getTopVC() {
 
 @end
 
+// ============================================
+// 手势识别 - 使用 Class Hook 而非实例 Hook
+// ============================================
 %group SpringBoardHooks
+
+// 使用全局变量存储 timer
+static NSTimer *g_longPressTimer = nil;
+static NSInteger g_activeTouchesCount = 0;
+
+// 创建单独的类来处理手势逻辑
+@interface SBTouchHandler : NSObject
++ (void)handleTouchesBegan:(NSSet *)touches withEvent:(UIEvent *)event inSpringBoard:(id)sb;
++ (void)handleTouchesMoved:(NSSet *)touches withEvent:(UIEvent *)event inSpringBoard:(id)sb;
++ (void)handleTouchesEnded:(NSSet *)touches withEvent:(UIEvent *)event inSpringBoard:(id)sb;
+@end
+
+@implementation SBTouchHandler
+
++ (void)handleTouchesBegan:(NSSet *)touches withEvent:(UIEvent *)event inSpringBoard:(id)sb {
+    if (touches.count == 3) {
+        g_activeTouchesCount = 3;
+        if (g_longPressTimer) [g_longPressTimer invalidate];
+        g_longPressTimer = [NSTimer scheduledTimerWithTimeInterval:0.6 target:self selector:@selector(triggerGesture) userInfo:nil repeats:NO];
+    }
+}
+
++ (void)triggerGesture {
+    loadKeywords();
+    DBSettingsViewController *settingsVC = [[DBSettingsViewController alloc] init];
+    UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:settingsVC];
+    nav.modalPresentationStyle = UIModalPresentationOverCurrentContext;
+    nav.view.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.4];
+    [getTopVC() presentViewController:nav animated:YES completion:nil];
+}
+
++ (void)handleTouchesMoved:(NSSet *)touches withEvent:(UIEvent *)event inSpringBoard:(id)sb {
+    if (g_activeTouchesCount != 3 || touches.count != 3) {
+        if (g_longPressTimer) { [g_longPressTimer invalidate]; g_longPressTimer = nil; }
+        g_activeTouchesCount = touches.count;
+    }
+}
+
++ (void)handleTouchesEnded:(NSSet *)touches withEvent:(UIEvent *)event inSpringBoard:(id)sb {
+    if (g_longPressTimer) { [g_longPressTimer invalidate]; g_longPressTimer = nil; }
+    g_activeTouchesCount = touches.count;
+}
+
+@end
+
+// Hook SpringBoard 的触摸方法
 %hook SpringBoard
 
-static NSTimer *longPressTimer = nil;
-static NSInteger activeTouchesCount = 0;
-
-%new
-- (void)db_handleThreeFingerLongPress:(UIGestureRecognizer *)gesture {
-    if (gesture.state == UIGestureRecognizerStateBegan) {
-        loadKeywords();
-        DBSettingsViewController *settingsVC = [[DBSettingsViewController alloc] init];
-        UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:settingsVC];
-        nav.modalPresentationStyle = UIModalPresentationOverCurrentContext;
-        nav.view.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.4];
-        [getTopVC() presentViewController:nav animated:YES completion:nil];
-    }
-}
-
-%new
-- (BOOL)db_isThreeFingerTouch:(NSSet<UITouch *> *)touches {
-    return touches.count == 3;
-}
-
-- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+- (void)touchesBegan:(NSSet *)touches withEvent:(UIEvent *)event {
     %orig;
-    if ([self db_isThreeFingerTouch:touches]) {
-        activeTouchesCount = 3;
-        if (longPressTimer) [longPressTimer invalidate];
-        longPressTimer = [NSTimer scheduledTimerWithTimeInterval:0.6 target:self selector:@selector(db_handleThreeFingerLongPress:) userInfo:nil repeats:NO];
-    }
+    [SBTouchHandler handleTouchesBegan:touches withEvent:event inSpringBoard:self];
 }
 
-- (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+- (void)touchesMoved:(NSSet *)touches withEvent:(UIEvent *)event {
     %orig;
-    if (activeTouchesCount != 3 || touches.count != 3) {
-        if (longPressTimer) { [longPressTimer invalidate]; longPressTimer = nil; }
-        activeTouchesCount = touches.count;
-    }
+    [SBTouchHandler handleTouchesMoved:touches withEvent:event inSpringBoard:self];
 }
 
-- (void)touchesEnded:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+- (void)touchesEnded:(NSSet *)touches withEvent:(UIEvent *)event {
     %orig;
-    if (longPressTimer) { [longPressTimer invalidate]; longPressTimer = nil; }
-    activeTouchesCount = touches.count;
+    [SBTouchHandler handleTouchesEnded:touches withEvent:event inSpringBoard:self];
 }
 
 %end
+
 %end
 
+// ============================================
+// 网络拦截
+// ============================================
 %group NSURLSessionHooks
 %hook NSURLSession
 
@@ -218,6 +255,9 @@ static NSInteger activeTouchesCount = 0;
 %end
 %end
 
+// ============================================
+// 入口点
+// ============================================
 %ctor {
     loadKeywords();
     %init(NSURLSessionHooks);
