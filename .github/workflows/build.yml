@@ -31,7 +31,6 @@ jobs:
         run: |
           cd DomainBlocker
           make package FINALPACKAGE=1 DEBUG=0
-          # 修复：deb 文件在 packages/ 子目录中
           ls -l packages/*.deb
           cp packages/*.deb domainblocker.deb
           echo "DEB_FILE=domainblocker.deb" >> $GITHUB_ENV
