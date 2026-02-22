@@ -4,10 +4,10 @@
 // ================= 配置区域 =================
 static NSString * const kStorageKey = @"DB_BlockedKeywords";
 static NSMutableArray *blockedKeywords = nil;
-static NSMutableArray *blockLogs = nil; // 内存日志，不持久化
+static NSMutableArray *blockLogs = nil;
 
 #define DEBUG_LOG 1
-#define MAX_LOG_COUNT 50 // 最多保留 50 条日志
+#define MAX_LOG_COUNT 50
 
 #if DEBUG_LOG
 #define RLog(...) NSLog(@"[DomainBlocker] " __VA_ARGS__)
@@ -22,7 +22,6 @@ static void loadKeywords() {
     NSArray *saved = [[NSUserDefaults standardUserDefaults] objectForKey:kStorageKey];
     blockedKeywords = saved ? [saved mutableCopy] : [NSMutableArray array];
     
-    // 日志数组初始化（不加载持久化数据）
     if (!blockLogs) {
         blockLogs = [NSMutableArray array];
     }
@@ -41,10 +40,9 @@ static void addLogEntry(NSString *url, NSString *keyword) {
     formatter.dateFormat = @"HH:mm:ss";
     NSString *timeStr = [formatter stringFromDate:[NSDate date]];
     
-    NSString *logEntry = [NSString stringWithFormat:@"%@ 🚫 %@ (命中:%@)", timeStr, url, keyword];
+    NSString *logEntry = [NSString stringWithFormat:@"%@ [拦截] %@ (命中:%@)", timeStr, url, keyword];
     [blockLogs addObject:logEntry];
     
-    // 限制日志数量
     while (blockLogs.count > MAX_LOG_COUNT) {
         [blockLogs removeObjectAtIndex:0];
     }
@@ -80,7 +78,7 @@ static UIViewController *getTopVC() {
     return nil;
 }
 
-// ================= 美化版悬浮框 UI =================
+// ================= UI =================
 @interface DBPopupViewController : UIViewController <UITableViewDelegate, UITableViewDataSource, UITextFieldDelegate>
 @property (nonatomic, strong) UIView *popupContainer;
 @property (nonatomic, strong) UITableView *tableView;
@@ -95,14 +93,12 @@ static UIViewController *getTopVC() {
 - (void)viewDidLoad {
     [super viewDidLoad];
     
-    // === 半透明背景（点击关闭）===
     UIView *bgView = [[UIView alloc] initWithFrame:self.view.bounds];
     bgView.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.5];
     [self.view addSubview:bgView];
     UITapGestureRecognizer *bgTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(closeSettings)];
     [bgView addGestureRecognizer:bgTap];
     
-    // === 悬浮框容器（圆角）===
     CGFloat popupWidth = self.view.bounds.size.width * 0.85;
     CGFloat popupHeight = self.view.bounds.size.height * 0.55;
     CGFloat popupX = (self.view.bounds.size.width - popupWidth) / 2;
@@ -118,7 +114,6 @@ static UIViewController *getTopVC() {
     self.popupContainer.userInteractionEnabled = YES;
     [self.view addSubview:self.popupContainer];
     
-    // === 标题栏 ===
     UIView *headerView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, popupWidth, 50)];
     headerView.backgroundColor = [UIColor whiteColor];
     headerView.layer.cornerRadius = 20;
@@ -145,7 +140,6 @@ static UIViewController *getTopVC() {
     lineView.backgroundColor = [[UIColor lightGrayColor] colorWithAlphaComponent:0.5];
     [self.popupContainer addSubview:lineView];
     
-    // === 输入区域 (精简版) ===
     CGFloat inputY = 58;
     CGFloat inputHeight = 50;
     UIView *inputContainer = [[UIView alloc] initWithFrame:CGRectMake(20, inputY, popupWidth - 40, inputHeight)];
@@ -171,7 +165,6 @@ static UIViewController *getTopVC() {
     [addBtn addTarget:self action:@selector(saveKeyword) forControlEvents:UIControlEventTouchUpInside];
     [inputContainer addSubview:addBtn];
     
-    // === 列表标题 ===
     CGFloat listTitleY = inputY + inputHeight + 10;
     self.listTitleLabel = [[UILabel alloc] initWithFrame:CGRectMake(20, listTitleY, popupWidth - 40, 20)];
     self.listTitleLabel.text = @"已屏蔽域名的关键词";
@@ -179,7 +172,6 @@ static UIViewController *getTopVC() {
     self.listTitleLabel.textColor = [UIColor darkGrayColor];
     [self.popupContainer addSubview:self.listTitleLabel];
     
-    // === 表格视图 ===
     CGFloat tableY = listTitleY + 25;
     CGFloat logHeight = 50;
     CGFloat tableHeight = popupHeight - tableY - logHeight - 20;
@@ -203,7 +195,6 @@ static UIViewController *getTopVC() {
         self.tableView.backgroundView = emptyLabel;
     }
     
-    // === 日志窗口 ===
     CGFloat logY = tableY + tableHeight + 10;
     self.logTextView = [[UITextView alloc] initWithFrame:CGRectMake(20, logY, popupWidth - 40, logHeight)];
     self.logTextView.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.05];
@@ -215,10 +206,9 @@ static UIViewController *getTopVC() {
     self.logTextView.showsVerticalScrollIndicator = YES;
     self.logTextView.textContainerInset = UIEdgeInsetsMake(4, 4, 4, 4);
     
-    // 填充日志内容（仅内存数据）
     NSMutableString *logContent = [NSMutableString string];
     if (blockLogs.count == 0) {
-        logContent appendString(@"暂无拦截记录...");
+        [logContent appendString:@"暂无拦截记录"];
     } else {
         NSInteger startIdx = (blockLogs.count >= 2) ? blockLogs.count - 2 : 0;
         for (NSInteger i = startIdx; i < blockLogs.count; i++) {
@@ -337,7 +327,7 @@ static NSInteger g_activeTouchesCount = 0;
 }
 
 + (void)triggerGesture {
-    RLog(@"三指长按触发！");
+    RLog(@"三指长按触发");
     loadKeywords();
     
     DBPopupViewController *popupVC = [[DBPopupViewController alloc] init];
@@ -409,9 +399,7 @@ static NSInteger g_activeTouchesCount = 0;
 %end
 
 %ctor {
-    // 初始化关键词（从持久化存储加载）
     loadKeywords();
-    // 日志数组每次插件加载时重置为空（不持久化）
     blockLogs = [NSMutableArray array];
     RLog(@"插件已加载，日志已清空");
     %init(DomainBlockerHooks);
