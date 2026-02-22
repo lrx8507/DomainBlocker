@@ -107,4 +107,121 @@ static UIViewController *getTopVC() {
         [self.inputField resignFirstResponder];
         [self.tableView reloadData];
         
-        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"成功" message:@"关键词已保存" preferredStyle:UIAler
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"成功" message:@"关键词已保存" preferredStyle:UIAlertControllerStyleAlert];
+        [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault handler:nil]];
+        [getTopVC() presentViewController:alert animated:YES completion:nil];
+    }
+}
+
+- (BOOL)textFieldShouldReturn:(UITextField *)textField {
+    [self saveKeyword];
+    return YES;
+}
+
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
+    return blockedKeywords.count;
+}
+
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
+    static NSString *cellID = @"Cell";
+    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:cellID];
+    if (!cell) {
+        cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:cellID];
+        cell.contentView.backgroundColor = [UIColor whiteColor];
+        cell.textLabel.font = [UIFont systemFontOfSize:16];
+    }
+    cell.textLabel.text = blockedKeywords[indexPath.row];
+    cell.textLabel.textColor = [UIColor blackColor];
+    return cell;
+}
+
+- (void)tableView:(UITableView *)tableView commitEditingStyle:(UITableViewCellEditingStyle)editingStyle forRowAtIndexPath:(NSIndexPath *)indexPath {
+    if (editingStyle == UITableViewCellEditingStyleDelete) {
+        [blockedKeywords removeObjectAtIndex:indexPath.row];
+        saveKeywords();
+        [tableView deleteRowsAtIndexPaths:@[indexPath] withRowAnimation:UITableViewRowAnimationFade];
+    }
+}
+
+@end
+
+%group SpringBoardHooks
+%hook SpringBoard
+
+static NSTimer *longPressTimer = nil;
+static NSInteger activeTouchesCount = 0;
+
+%new
+- (void)db_handleThreeFingerLongPress:(UIGestureRecognizer *)gesture {
+    if (gesture.state == UIGestureRecognizerStateBegan) {
+        loadKeywords();
+        DBSettingsViewController *settingsVC = [[DBSettingsViewController alloc] init];
+        UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:settingsVC];
+        nav.modalPresentationStyle = UIModalPresentationOverCurrentContext;
+        nav.view.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.4];
+        [getTopVC() presentViewController:nav animated:YES completion:nil];
+    }
+}
+
+%new
+- (BOOL)db_isThreeFingerTouch:(NSSet<UITouch *> *)touches {
+    return touches.count == 3;
+}
+
+- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    %orig;
+    if ([self db_isThreeFingerTouch:touches]) {
+        activeTouchesCount = 3;
+        if (longPressTimer) [longPressTimer invalidate];
+        longPressTimer = [NSTimer scheduledTimerWithTimeInterval:0.6 target:self selector:@selector(db_handleThreeFingerLongPress:) userInfo:nil repeats:NO];
+    }
+}
+
+- (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    %orig;
+    if (activeTouchesCount != 3 || touches.count != 3) {
+        if (longPressTimer) { [longPressTimer invalidate]; longPressTimer = nil; }
+        activeTouchesCount = touches.count;
+    }
+}
+
+- (void)touchesEnded:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    %orig;
+    if (longPressTimer) { [longPressTimer invalidate]; longPressTimer = nil; }
+    activeTouchesCount = touches.count;
+}
+
+%end
+%end
+
+%group NSURLSessionHooks
+%hook NSURLSession
+
+- (NSURLSessionDataTask *)dataTaskWithURL:(NSURL *)url completionHandler:(void (^)(NSData *, NSURLResponse *, NSError *))completionHandler {
+    if (isUrlBlocked(url)) {
+        NSError *err = [NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorNotConnectedToInternet userInfo:@{NSLocalizedDescriptionKey: @"该域名已被屏蔽"}];
+        if (completionHandler) completionHandler(nil, nil, err);
+        return nil;
+    }
+    return %orig;
+}
+
+- (NSURLSessionDataTask *)dataTaskWithRequest:(NSURLRequest *)request completionHandler:(void (^)(NSData *, NSURLResponse *, NSError *))completionHandler {
+    if (isUrlBlocked(request.URL)) {
+        NSError *err = [NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorNotConnectedToInternet userInfo:@{NSLocalizedDescriptionKey: @"该域名已被屏蔽"}];
+        if (completionHandler) completionHandler(nil, nil, err);
+        return nil;
+    }
+    return %orig;
+}
+
+%end
+%end
+
+%ctor {
+    loadKeywords();
+    %init(NSURLSessionHooks);
+    if ([[[NSProcessInfo processInfo] processName] isEqualToString:@"SpringBoard"]) {
+        %init(SpringBoardHooks);
+    }
+}
